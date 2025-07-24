@@ -120,15 +120,26 @@ const TextAreaMarkdown: React.FC<Props> = ({
     handleEditorChange(RichUtils.toggleBlockType(editorState, blockType));
   };
 
-  const clearFormatting = () => {
-    const content = editorState.getCurrentContent();
-    const plainText = content.getPlainText();
-    const newState = EditorState.createWithContent(
-      ContentState.createFromText(plainText),
-      decorator
-    );
-    handleEditorChange(newState);
-  };
+const clearFormatting = () => {
+  const selection = editorState.getSelection();
+  if (selection.isCollapsed()) return;
+
+  let contentState = editorState.getCurrentContent();
+
+  // Удаляем все inline-стили в выделении
+  const currentStyles = ['BOLD', 'ITALIC', 'UNDERLINE'];
+  currentStyles.forEach(style => {
+    contentState = Modifier.removeInlineStyle(contentState, selection, style);
+  });
+
+  // Удаляем все entity (например, ссылки)
+  contentState = Modifier.applyEntity(contentState, selection, null);
+
+  const newEditorState = EditorState.push(editorState, contentState, 'change-inline-style');
+  const forcedSelectionState = EditorState.forceSelection(newEditorState, selection);
+  handleEditorChange(forcedSelectionState);
+};
+
 
   const undo = () => {
     const newState = EditorState.undo(editorState);
