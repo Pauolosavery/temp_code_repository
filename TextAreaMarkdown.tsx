@@ -88,6 +88,28 @@ const TextAreaMarkdown: React.FC<Props> = ({
     const [charCount, setCharCount] = useState(
         editorState.getCurrentContent().getPlainText().length
     );
+const handlePastedText = (text: string, html: string | undefined, state: EditorState): boolean => {
+    const currentContent = state.getCurrentContent();
+    const selection = state.getSelection();
+
+    const contentWithPastedText = Modifier.replaceText(currentContent, selection, text);
+    const newPlainText = contentWithPastedText.getPlainText();
+
+    if (newPlainText.length > maxLength) {
+        const availableChars = maxLength - currentContent.getPlainText().length;
+        if (availableChars <= 0) return true;
+
+        const trimmedText = text.slice(0, availableChars);
+        const limitedContent = Modifier.replaceText(currentContent, selection, trimmedText);
+        const newState = EditorState.push(state, limitedContent, 'insert-characters');
+        handleEditorChange(newState);
+        return true;
+    }
+
+    const newState = EditorState.push(state, contentWithPastedText, 'insert-characters');
+    handleEditorChange(newState);
+    return true;
+};
 
     const handleEditorChange = (state: EditorState) => {
         const content = state.getCurrentContent();
@@ -271,6 +293,7 @@ const TextAreaMarkdown: React.FC<Props> = ({
                     editorState={editorState}
                     onChange={handleEditorChange}
                     handleKeyCommand={handleKeyCommand}
+                    handlePastedText={handlePastedText}
                     placeholder="Введите текст с форматированием..."
                 />
             </div>
