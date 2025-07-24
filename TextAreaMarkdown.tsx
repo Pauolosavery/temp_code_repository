@@ -3,6 +3,7 @@ import {
     CompositeDecorator,
     Editor,
     EditorState,
+    ContentState,
     Modifier,
     RichUtils,
     convertFromRaw,
@@ -222,6 +223,17 @@ const handlePastedText = (text: string, html: string | undefined, state: EditorS
         }
     };
 
+    useEffect(() => {
+    return () => {
+        const emptyState = EditorState.createWithContent(
+            ContentState.createFromText(''),
+            decorator
+        );
+        setEditorState(emptyState);
+        onChange('');
+    };
+}, []);
+    
     return (
         <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
             <Space size='large' style={{marginBottom: 12}}>
