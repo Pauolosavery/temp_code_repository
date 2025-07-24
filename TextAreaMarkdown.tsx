@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   Editor,
   EditorState,
@@ -55,6 +55,8 @@ const TextAreaMarkdown: React.FC<Props> = ({
   initialValue = '',
   maxLength = defaultMaxLength,
 }) => {
+  const editorRef = useRef<Editor>(null);
+
   const [editorState, setEditorState] = useState<EditorState>(() => {
     try {
       const contentState = convertFromRaw(markdownToDraft(initialValue));
@@ -67,7 +69,27 @@ const TextAreaMarkdown: React.FC<Props> = ({
   const [charCount, setCharCount] = useState(
     editorState.getCurrentContent().getPlainText().length
   );
+const focusEditorToEnd = () => {
+  const content = editorState.getCurrentContent();
+  const blockMap = content.getBlockMap();
+  const lastBlock = blockMap.last();
+  const key = lastBlock.getKey();
+  const length = lastBlock.getLength();
 
+  const selection = editorState.getSelection();
+  const newSelection = selection.merge({
+    anchorKey: key,
+    anchorOffset: length,
+    focusKey: key,
+    focusOffset: length,
+    isBackward: false,
+  });
+
+  const newEditorState = EditorState.forceSelection(editorState, newSelection);
+  setEditorState(newEditorState);
+  editorRef.current?.focus();
+};
+  
   const handleEditorChange = (state: EditorState) => {
     const content = state.getCurrentContent();
     const plainText = content.getPlainText();
@@ -213,14 +235,23 @@ const clearFormatting = () => {
         </button>
       </div>
 
-      <div style={{ minHeight: '150px', cursor: 'text' }}>
-        <Editor
-          editorState={editorState}
-          onChange={handleEditorChange}
-          handleKeyCommand={handleKeyCommand}
-          placeholder="Введите текст с форматированием..."
-        />
-      </div>
+      <div
+  style={{ minHeight: '150px', cursor: 'text' }}
+  onClick={(e) => {
+    // Только если клик вне выделенного текста
+    if (e.target === e.currentTarget) {
+      focusEditorToEnd();
+    }
+  }}
+>
+  <Editor
+    ref={editorRef}
+    editorState={editorState}
+    onChange={handleEditorChange}
+    handleKeyCommand={handleKeyCommand}
+    placeholder="Введите текст с форматированием..."
+  />
+</div>
 
       <div
         style={{
