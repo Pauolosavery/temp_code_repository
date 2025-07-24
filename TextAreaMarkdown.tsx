@@ -1,15 +1,15 @@
-import React, { useState, useCallback, useRef } from 'react';
+import { Button, Icon, IconCatalog, Space, Tooltip, Typography } from '@sber-genf-lib/astra-ui-kit';
 import {
-  Editor,
-  EditorState,
-  RichUtils,
-  convertToRaw,
-  convertFromRaw,
-  ContentState,
-  Modifier,
-  CompositeDecorator,
+    CompositeDecorator,
+    Editor,
+    EditorState,
+    Modifier,
+    RichUtils,
+    convertFromRaw,
+    convertToRaw,
 } from 'draft-js';
 import { draftToMarkdown, markdownToDraft } from 'markdown-draft-js';
+import React, { useCallback, useRef, useState } from 'react';
 import 'draft-js/dist/Draft.css';
 
 type Props = {
@@ -20,251 +20,275 @@ type Props = {
 
 const defaultMaxLength = 2000;
 
-// ===== Ссылки =====
 const findLinkEntities = (
-  contentBlock: any,
-  callback: any,
-  contentState: any
+    contentBlock: any,
+    callback: any,
+    contentState: any
 ) => {
-  contentBlock.findEntityRanges((character: any) => {
-    const entityKey = character.getEntity();
-    return (
-      entityKey !== null && contentState.getEntity(entityKey).getType() === 'LINK'
-    );
-  }, callback);
+    contentBlock.findEntityRanges((character: any) => {
+        const entityKey = character.getEntity();
+        return (
+            entityKey !== null && contentState.getEntity(entityKey).getType() === 'LINK'
+        );
+    }, callback);
 };
 
 const Link = (props: any) => {
-  const { url } = props.contentState.getEntity(props.entityKey).getData();
-  return (
-    <a href={url} style={{ color: 'blue', textDecoration: 'underline' }}>
-      {props.children}
-    </a>
-  );
+    const { url } = props.contentState.getEntity(props.entityKey).getData();
+    return (
+        <a href={url} style={{ color: 'blue', textDecoration: 'underline' }}>
+            {props.children}
+        </a>
+    );
 };
 
 const decorator = new CompositeDecorator([
-  {
-    strategy: findLinkEntities,
-    component: Link,
-  },
+    {
+        strategy: findLinkEntities,
+        component: Link,
+    },
 ]);
 
 const TextAreaMarkdown: React.FC<Props> = ({
-  onChange,
-  initialValue = '',
-  maxLength = defaultMaxLength,
+    onChange,
+    initialValue = '',
+    maxLength = defaultMaxLength,
 }) => {
-  const editorRef = useRef<Editor>(null);
+    const [editorState, setEditorState] = useState<EditorState>(() => {
+        try {
+            const contentState = convertFromRaw(markdownToDraft(initialValue));
+            return EditorState.createWithContent(contentState, decorator);
+        } catch {
+            return EditorState.createEmpty(decorator);
+        }
+    });
+    const editorRef = useRef<Editor>(null);
+    const focusEditorToEnd = () => {
+        const content = editorState.getCurrentContent();
+        const blockMap = content.getBlockMap();
+        const lastBlock = blockMap.last();
+        const key = lastBlock.getKey();
+        const length = lastBlock.getLength();
+      
+        const selection = editorState.getSelection();
+        const newSelection = selection.merge({
+            anchorKey: key,
+            anchorOffset: length,
+            focusKey: key,
+            focusOffset: length,
+            isBackward: false,
+        });
+      
+        const newEditorState = EditorState.forceSelection(editorState, newSelection);
+        setEditorState(newEditorState);
+        editorRef.current?.focus();
+    };
 
-  const [editorState, setEditorState] = useState<EditorState>(() => {
-    try {
-      const contentState = convertFromRaw(markdownToDraft(initialValue));
-      return EditorState.createWithContent(contentState, decorator);
-    } catch {
-      return EditorState.createEmpty(decorator);
-    }
-  });
+    const [isOpenTooltipLink, setIsOpenTooltipLink] = useState(false);
+    const [charCount, setCharCount] = useState(
+        editorState.getCurrentContent().getPlainText().length
+    );
 
-  const [charCount, setCharCount] = useState(
-    editorState.getCurrentContent().getPlainText().length
-  );
-const focusEditorToEnd = () => {
-  const content = editorState.getCurrentContent();
-  const blockMap = content.getBlockMap();
-  const lastBlock = blockMap.last();
-  const key = lastBlock.getKey();
-  const length = lastBlock.getLength();
+    const handleEditorChange = (state: EditorState) => {
+        const content = state.getCurrentContent();
+        const plainText = content.getPlainText();
+        if (plainText.length <= maxLength) {
+            setEditorState(state);
+            setCharCount(plainText.length);
+            const markdown = draftToMarkdown(convertToRaw(content), {
+                styleToMarkdown: {
+                    ITALIC: (text) => `*${text}*`,
+                    BOLD: (text) => `**${text}**`,
+                    UNDERLINE: (text) => `<u>${text}</u>`,
+                },
+                entityToMarkdown: (entity, originalText) => {
+                    if (entity.type === 'LINK') {
+                        return `[${originalText}](${entity.data.url})`;
+                    }
+                    return originalText;
+                },
+            });
+            onChange(markdown);
+        }
+    };
 
-  const selection = editorState.getSelection();
-  const newSelection = selection.merge({
-    anchorKey: key,
-    anchorOffset: length,
-    focusKey: key,
-    focusOffset: length,
-    isBackward: false,
-  });
+    const handleKeyCommand = useCallback(
+        (command: string, state: EditorState): 'handled' | 'not-handled' => {
+            if (command === 'undo') {
+                undo();
+                return 'handled';
+            }
+            if (command === 'redo') {
+                redo();
+                return 'handled';
+            }
 
-  const newEditorState = EditorState.forceSelection(editorState, newSelection);
-  setEditorState(newEditorState);
-  editorRef.current?.focus();
-};
-  
-  const handleEditorChange = (state: EditorState) => {
-    const content = state.getCurrentContent();
-    const plainText = content.getPlainText();
-    if (plainText.length <= maxLength) {
-      setEditorState(state);
-      setCharCount(plainText.length);
-      const markdown = draftToMarkdown(convertToRaw(content), {
-        styleToMarkdown: {
-          ITALIC: (text) => `*${text}*`,
-          BOLD: (text) => `**${text}**`,
-          UNDERLINE: (text) => `<u>${text}</u>`,
+            const newState = RichUtils.handleKeyCommand(state, command);
+            if (newState) {
+                handleEditorChange(newState);
+                return 'handled';
+            }
+            return 'not-handled';
         },
-        entityToMarkdown: (entity, originalText) => {
-          if (entity.type === 'LINK') {
-            return `[${originalText}](${entity.data.url})`;
-          }
-          return originalText;
-        },
-      });
-      onChange(markdown);
-    }
-  };
+        [editorState]
+    );
 
-  const handleKeyCommand = useCallback(
-    (command: string, state: EditorState): 'handled' | 'not-handled' => {
-      if (command === 'undo') {
-        undo();
-        return 'handled';
-      }
-      if (command === 'redo') {
-        redo();
-        return 'handled';
-      }
+    const toggleInlineStyle = (style: string) => {
+        handleEditorChange(RichUtils.toggleInlineStyle(editorState, style));
+    };
 
-      const newState = RichUtils.handleKeyCommand(state, command);
-      if (newState) {
+    const toggleBlockType = (blockType: string) => {
+        handleEditorChange(RichUtils.toggleBlockType(editorState, blockType));
+    };
+
+    const clearFormatting = () => {
+        const selection = editorState.getSelection();
+        if (selection.isCollapsed()) {return;}
+
+        let contentState = editorState.getCurrentContent();
+
+        // Удаляем все inline-стили в выделении
+        const currentStyles = ['BOLD', 'ITALIC', 'UNDERLINE'];
+        currentStyles.forEach(style => {
+            contentState = Modifier.removeInlineStyle(contentState, selection, style);
+        });
+
+        // Удаляем все entity (например, ссылки)
+        contentState = Modifier.applyEntity(contentState, selection, null);
+
+        const newEditorState = EditorState.push(editorState, contentState, 'change-inline-style');
+        const forcedSelectionState = EditorState.forceSelection(newEditorState, selection);
+        handleEditorChange(forcedSelectionState);
+    };
+
+    const undo = () => {
+        const newState = EditorState.undo(editorState);
         handleEditorChange(newState);
-        return 'handled';
-      }
-      return 'not-handled';
-    },
-    [editorState]
-  );
+    };
 
-  const toggleInlineStyle = (style: string) => {
-    handleEditorChange(RichUtils.toggleInlineStyle(editorState, style));
-  };
+    const redo = () => {
+        const newState = EditorState.redo(editorState);
+        handleEditorChange(newState);
+    };
 
-  const toggleBlockType = (blockType: string) => {
-    handleEditorChange(RichUtils.toggleBlockType(editorState, blockType));
-  };
+    const insertLink = () => {
+        const selection = editorState.getSelection();
+        if (!selection.isCollapsed()) {
+            const url = window.prompt('Введите URL ссылки:');
+            if (!url) {return;}
 
-const clearFormatting = () => {
-  const selection = editorState.getSelection();
-  if (selection.isCollapsed()) return;
+            const contentState = editorState.getCurrentContent();
+            const contentWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
+            const entityKey = contentWithEntity.getLastCreatedEntityKey();
 
-  let contentState = editorState.getCurrentContent();
+            const contentWithLink = Modifier.applyEntity(
+                contentWithEntity,
+                selection,
+                entityKey
+            );
 
-  // Удаляем все inline-стили в выделении
-  const currentStyles = ['BOLD', 'ITALIC', 'UNDERLINE'];
-  currentStyles.forEach(style => {
-    contentState = Modifier.removeInlineStyle(contentState, selection, style);
-  });
+            const newState = EditorState.push(
+                editorState,
+                contentWithLink,
+                'apply-entity'
+            );
 
-  // Удаляем все entity (например, ссылки)
-  contentState = Modifier.applyEntity(contentState, selection, null);
+            setEditorState(EditorState.forceSelection(newState, selection));
+            handleEditorChange(newState);
+        } else {
+            setIsOpenTooltipLink(true);
+        }
+    };
 
-  const newEditorState = EditorState.push(editorState, contentState, 'change-inline-style');
-  const forcedSelectionState = EditorState.forceSelection(newEditorState, selection);
-  handleEditorChange(forcedSelectionState);
-};
+    return (
+        <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
+            <Space size='large' style={{marginBottom: 12}}>
+                <Space size='small'>
+                    <Button type='secondary'
+                        onClick={() => toggleInlineStyle('BOLD')}
+                        icon={<Icon icon={IconCatalog.EditorOutlined.BoldOutlined}/>}
+                    />
+                    <Button type='secondary'
+                        onClick={() => toggleInlineStyle('ITALIC')}
+                        icon={<Icon icon={IconCatalog.EditorOutlined.ItalicOutlined}/>}
+                    />
+                    <Button type='secondary'
+                        onClick={() => toggleInlineStyle('UNDERLINE')}
+                        icon={<Icon icon={IconCatalog.EditorOutlined.UnderlineOutlined}/>}
+                    />
+                </Space>
+                
+                <Space size='small'>
+                    <Button type='secondary'
+                        icon={<Icon icon={IconCatalog.ApplicationOutlined.BarsOutlined}/>}
+                        onClick={() => toggleBlockType('unordered-list-item')}/>
+                    <Button type='secondary'
+                        icon={<Icon icon={IconCatalog.EditorOutlined.OrderedListOutlined}/>}
+                        onClick={() => toggleBlockType('ordered-list-item')}/>
+                </Space>
 
+                <Space size='small'>
+                    <Button  type='secondary'
+                        icon={<Icon icon={IconCatalog.EditorOutlined.DeleteOutlined}/>}
+                        onClick={clearFormatting}
+                    />
+                </Space>
 
-  const undo = () => {
-    const newState = EditorState.undo(editorState);
-    handleEditorChange(newState);
-  };
+                <Space size='small'>
+                    <Tooltip title='Сначала выделите текст, к которому хотите применить ссылку' open={isOpenTooltipLink}>
+                        <Button  type='secondary'
+                            icon={<Icon icon={IconCatalog.ApplicationOutlined.LinkOutlined}/>}
+                            onClick={insertLink}
+                            onMouseLeave={() => setIsOpenTooltipLink(false)}
+                        />
+                    </Tooltip>
+                </Space>
 
-  const redo = () => {
-    const newState = EditorState.redo(editorState);
-    handleEditorChange(newState);
-  };
+                <Space size='small'>
+                    <Button type='secondary'
+                        color=''
+                        icon={<Icon icon={IconCatalog.EditorOutlined.UndoOutlined}/>}
+                        onClick={undo}
+                        disabled={editorState.getUndoStack().size === 0}
+                    />
+                    <Button type='secondary'
+                        icon={<Icon icon={IconCatalog.EditorOutlined.RedoOutlined}/>}
+                        onClick={redo}
+                        disabled={editorState.getRedoStack().size === 0}
+                    />
+                </Space>
+            </Space>
 
-  const insertLink = () => {
-    const selection = editorState.getSelection();
-    if (!selection.isCollapsed()) {
-      const url = window.prompt('Введите URL ссылки:');
-      if (!url) return;
+            <div style={{ minHeight: '150px', cursor: 'text' }}
+                onClick={(e) => {
+                    if (e.target === e.currentTarget) {
+                        focusEditorToEnd();
+                    }
+                }}
+            >
+                <Editor
+                    ref={editorRef}
+                    editorState={editorState}
+                    onChange={handleEditorChange}
+                    handleKeyCommand={handleKeyCommand}
+                    placeholder="Введите текст с форматированием..."
+                />
+            </div>
 
-      const contentState = editorState.getCurrentContent();
-      const contentWithEntity = contentState.createEntity('LINK', 'MUTABLE', { url });
-      const entityKey = contentWithEntity.getLastCreatedEntityKey();
-
-      const contentWithLink = Modifier.applyEntity(
-        contentWithEntity,
-        selection,
-        entityKey
-      );
-
-      const newState = EditorState.push(
-        editorState,
-        contentWithLink,
-        'apply-entity'
-      );
-
-      setEditorState(EditorState.forceSelection(newState, selection));
-      handleEditorChange(newState);
-    } else {
-      alert('Сначала выделите текст, к которому хотите применить ссылку.');
-    }
-  };
-
-  return (
-    <div style={{ border: '1px solid #ccc', padding: '1rem', borderRadius: '8px' }}>
-      <div
-        style={{
-          marginBottom: '0.5rem',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: '0.5rem',
-        }}
-      >
-        <button onClick={() => toggleInlineStyle('BOLD')}>Bold</button>
-        <button onClick={() => toggleInlineStyle('ITALIC')}>Italic</button>
-        <button onClick={() => toggleInlineStyle('UNDERLINE')}>Underline</button>
-        <button onClick={() => toggleBlockType('unordered-list-item')}>• List</button>
-        <button onClick={() => toggleBlockType('ordered-list-item')}>1. List</button>
-        <button onClick={clearFormatting}>Clear</button>
-        <button onClick={insertLink} title="Insert Link">🔗</button>
-        <button
-          onClick={undo}
-          title="Undo"
-          disabled={editorState.getUndoStack().size === 0}
-        >
-          ↶
-        </button>
-        <button
-          onClick={redo}
-          title="Redo"
-          disabled={editorState.getRedoStack().size === 0}
-        >
-          ↷
-        </button>
-      </div>
-
-      <div
-  style={{ minHeight: '150px', cursor: 'text' }}
-  onClick={(e) => {
-    // Только если клик вне выделенного текста
-    if (e.target === e.currentTarget) {
-      focusEditorToEnd();
-    }
-  }}
->
-  <Editor
-    ref={editorRef}
-    editorState={editorState}
-    onChange={handleEditorChange}
-    handleKeyCommand={handleKeyCommand}
-    placeholder="Введите текст с форматированием..."
-  />
-</div>
-
-      <div
-        style={{
-          textAlign: 'right',
-          marginTop: '0.5rem',
-          fontSize: '0.9rem',
-          color: '#666',
-        }}
-      >
-        {charCount} / {maxLength}
-      </div>
-    </div>
-  );
+            <div
+                style={{
+                    textAlign: 'right',
+                    marginTop: '0.5rem',
+                    fontSize: '0.9rem',
+                    color: '#666',
+                }}
+            >
+                <Typography.Text color=''>
+                    {charCount} / {maxLength}
+                </Typography.Text>
+            </div>
+        </div>
+    );
 };
 
 export default TextAreaMarkdown;
