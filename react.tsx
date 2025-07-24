@@ -7,8 +7,7 @@ import {
   convertFromRaw,
   ContentState,
 } from 'draft-js';
-import { stateToMarkdown } from 'markdown-draft-js';
-import { stateFromMarkdown } from 'markdown-draft-js';
+import { draftToMarkdown, markdownToDraft } from 'markdown-draft-js';
 import 'draft-js/dist/Draft.css';
 
 type Props = {
@@ -26,7 +25,7 @@ const TextAreaMarkdown: React.FC<Props> = ({
 }) => {
   const [editorState, setEditorState] = useState<EditorState>(() => {
     try {
-      const contentState = stateFromMarkdown(initialValue || '');
+      const contentState = convertFromRaw(markdownToDraft(initialValue));
       return EditorState.createWithContent(contentState);
     } catch {
       return EditorState.createEmpty();
@@ -41,7 +40,7 @@ const TextAreaMarkdown: React.FC<Props> = ({
     if (plainText.length <= maxLength) {
       setEditorState(state);
       setCharCount(plainText.length);
-      const markdown = stateToMarkdown(convertToRaw(content));
+      const markdown = draftToMarkdown(convertToRaw(content));
       onChange(markdown);
     }
   };
@@ -86,7 +85,7 @@ const TextAreaMarkdown: React.FC<Props> = ({
         <button onClick={clearFormatting}>Clear</button>
       </div>
 
-      <div style={{ minHeight: '150px', cursor: 'text' }} onClick={() => document.getSelection()?.removeAllRanges()}>
+      <div style={{ minHeight: '150px', cursor: 'text' }}>
         <Editor
           editorState={editorState}
           onChange={handleEditorChange}
